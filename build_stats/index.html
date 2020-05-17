@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Trilinos Build Stats Demo</title>
+    <!-- <link href="https://fonts.googleapis.com/css?family=Lato|Roboto|Source+Code+Pro" rel="stylesheet"> -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.6/styles/monokai.min.css"> -->
+    <!-- <link rel="stylesheet" href="demo.css"> -->
+    <link rel="stylesheet" href="js/tabulator/dist/css/tabulator.min.css">
+  </head>
+<style>
+
+form {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+.node {
+  border: solid 1px white;
+  font: 10px sans-serif;
+  line-height: 12px;
+  overflow: hidden;
+  position: absolute;
+  text-indent: 2px;
+}
+</style>
+
+  <body>
+    <div>
+        <h2>Description</h2>
+        <p>Look to the upper right for a dropdown menu.  Choose any metric to see what data were
+           gathered during this build.
+            </br>
+           The top-most row of the treemap reports where in the hierarchy you are
+           (as well as the subtotal for this nested region).
+            </br>
+
+           Clicking on boxes will navigate into the treemap.  Clicking on the top-most area
+           will move backwards (up the hierarchy).
+           <b>Some text is not legible - mouse over for a tooltip.</b>
+            </br>
+
+           Look past the treemap for a data table that sortable and filterable via regex.
+            </br>
+
+           All data is processes within the browser using the URL parameter csv_file.
+        </p>
+        <hr>
+        <h2>Input</h2>
+        Optionally load a file from your local machine (not a url)
+        </br>
+        <input type="file" id="files" name="files[]" multiple />
+        <hr />
+        <div id="file-info"></div>
+        <hr />
+        <h2 id="treemap_h2">Treemap</h2>
+        <div class="container1">
+          <form>
+            <select id="treemap_metrics"
+                    name="treemap_metrics"
+                    onchange="change_treemap_metric(this)">Select Metric to Treemap</select>
+          </form>
+          <!-- Create a div where the graph will take place -->
+          <div id="my_dataviz"></div>
+        </div>
+        <hr />
+        <h2>Data</h2>
+        <div id="example-table"></div>
+        <!--
+        <textarea id="result" style="height: 250px;"></textarea>
+        <textarea id="json_result" style="height: 250px;"></textarea>
+         -->
+    </div>
+
+    <script src="js/jquery-3.5.1.min.js"></script>
+    <script src="js/jquery.csv.js"></script>
+    <script src="js/helpers.js"></script>
+    <script src="js/highlight.min.js"></script>
+    <script src="js/tabulator/dist/js/tabulator.min.js"></script>
+    <script src="js/moment.min.js"></script>
+    <!-- Load d3.js -->
+    <script src="js/d3.v5.js"></script>
+
+    <script>
+    var create_uid_count = 0;
+    var glb_json_data;
+
+    async function change_treemap_metric(selectObject) {
+      var value = selectObject.value;
+      console.log(value);
+      let tree_map_future = await build_treemap3( "#my_dataviz"
+                                                , glb_json_data
+                                                , value
+                                                );
+    }
+
+    // modified from observable.js
+    function create_uid(name) {
+      var st = "O-" + (name == null ? "" : name + "-") + ++create_uid_count;
+      return st
+    }
+
+    // this code is heavily modified from
+    // https://observablehq.com/@d3/zoomable-treemap
+    async function build_treemap3(div_name, json_data, field_name) {
+      console.log("Constructing a treemap with %s metric", field_name);
+      document.getElementById('treemap_h2').innerHTML = `Treemap: ${field_name}`;
+      var width = 954
+      var height = 500
+      var height_for_top_header = 30
+      return chart(div_name, json_data, field_name)
+      function chart(div_name, json_data, field_name) {
+
+        //d3 = require("d3@5")
+        format = d3.format(",d")
+        color = d3.scaleOrdinal(d3.schemeCategory10)
+
+        const x = d3.scaleLinear().rangeRound([0, width]);
+        const y = d3.scaleLinear().rangeRound([0, height]);
+
+
+        //const svg = d3.create("svg")
+        // delete any treemap first... probably don't wanna do this
+
+        //$(div_name).innerHTML = "";
+        d3.selectAll(`${div_name} > *`).remove();
+        var svg = d3.select(div_name)
+            .append("svg")
+            .attr("viewBox", [0.5, -(height_for_top_header+0.5), width, height + height_for_top_header])
+            //.attr("viewBox", [0, 0, width, height ])
+            .style("font", "10px sans-serif");
+
+        //console.log(JSON.stringify(json_data, null, 2))
+
+        let group = svg.append("g")
+            .call(render, treemap(json_data, field_name));
+
+        function render(group, root) {
+
+//           console.log("=============== Group ==============")
+//           console.log(JSON.stringify(group, null, 2))
+//           console.log("=============== Root  ==============")
+//           console.log(root)
+//           console.log("====================================")
+          const node = group
+            .selectAll("g")
+            .data(root.children.concat(root))
+            .join("g")
+            .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+          node.filter(d => d === root ? d.parent : d.children)
+              .attr("cursor", "pointer")
+              .on("click", d => d === root ? zoomout(root) : zoomin(d));
+
+          // the tooltip
+          node.append("title")
+              .text(d => `${treemap_name(d)} ${format(d.value)}`);
+
+
+          node.append("rect")
+              .attr("id", d => (d.leafUid = create_uid("leaf")).id)
+              .attr("fill", d => { while (d.depth > 1) d = d.parent; return color(d.data.name); })
+              .attr("fill-opacity", 0.6)
+              .attr("width", d => d.x1 - d.x0)
+              .attr("height", d => d.y1 - d.y0)
+              .attr("stroke", "#fff");
+
+
+          node.append("clipPath")
+              .attr("id", d => (d.clipUid = create_uid("clip")).id)
+            .append("use")
+              .attr("xlink:href", d => d.leafUid.href);
+
+          node.append("text")
+              .attr("clip-path", d => d.clipUid)
+              .attr("font-weight", d => d === root ? "bold" : null)
+            .selectAll("tspan")
+            .data(function(d) {
+                if (d === root) {
+                  //console.log("%s", treemap_name(d).join("") + ' ' + format(d.value))
+                  return [ treemap_name(d) /*.split(/(?=[A-Z][^A-Z])/g)*/ + ' ' + format(d.value) ];
+                }
+                else {
+                  return d.data.name.split(/(?=[A-Z][^A-Z])/g).concat(format(d.value))
+                }
+              })
+            .join("tspan")
+              .attr("x", 3)
+              .attr("y", (d, i, nodes) => `${(i === nodes.length - 1) * 0.3 + 1.1 + i * 0.9}em`)
+              .attr("fill-opacity", (d, i, nodes) => i === nodes.length - 1 ? 1.0 /*0.7*/ : null)
+              .attr("font-weight", (d, i, nodes) => i === nodes.length - 1 ? "normal" : null)
+              .text(function(d) {
+                  //console.log(d);
+                  return d
+                  });
+
+          group.call(position, root);
+        }
+
+        function position(group, root) {
+          group.selectAll("g")
+              .attr("transform", d => d === root ? `translate(0,-30)` : `translate(${x(d.x0)},${y(d.y0)})`)
+            .select("rect")
+              .attr("width", d => d === root ? width : x(d.x1) - x(d.x0))
+              .attr("height", d => d === root ? 30 : y(d.y1) - y(d.y0));
+        }
+
+        // When zooming in, draw the new nodes on top, and fade them in.
+        function zoomin(d) {
+          const group0 = group.attr("pointer-events", "none");
+          const group1 = group = svg.append("g").call(render, d);
+
+          x.domain([d.x0, d.x1]);
+          y.domain([d.y0, d.y1]);
+
+          svg.transition()
+              .duration(750)
+              .call(t => group0.transition(t).remove()
+                .call(position, d.parent))
+              .call(t => group1.transition(t)
+                .attrTween("opacity", () => d3.interpolate(0, 1))
+                .call(position, d));
+        }
+
+        // When zooming out, draw the old nodes on top, and fade them out.
+        function zoomout(d) {
+          const group0 = group.attr("pointer-events", "none");
+          const group1 = group = svg.insert("g", "*").call(render, d.parent);
+
+          x.domain([d.parent.x0, d.parent.x1]);
+          y.domain([d.parent.y0, d.parent.y1]);
+
+          svg.transition()
+              .duration(750)
+              .call(t => group0.transition(t).remove()
+                .attrTween("opacity", () => d3.interpolate(1, 0))
+                .call(position, d))
+              .call(t => group1.transition(t)
+                .call(position, d.parent));
+        }
+
+        return svg.node();
+      } // chart
+
+      function treemap(data, field){
+
+//           console.log("=============== Data ==============")
+//           console.log(JSON.stringify(data, null, 2))
+//           console.log("=============== Field  ==============")
+//           console.log(field)
+//           console.log("====================================")
+
+        const tm = d3.treemap()
+                      .tile(treemap_tile)
+                      (d3.hierarchy(data)
+                          .sum( d => d[field])
+                          .sort((a, b) => b[field] - a[field]))
+        return tm
+      }
+
+      function treemap_tile(node, x0, y0, x1, y1) {
+        d3.treemapBinary(node, 0, 0, width, height);
+        for (const child of node.children) {
+          child.x0 = x0 + child.x0 / width * (x1 - x0);
+          child.x1 = x0 + child.x1 / width * (x1 - x0);
+          child.y0 = y0 + child.y0 / height * (y1 - y0);
+          child.y1 = y0 + child.y1 / height * (y1 - y0);
+        }
+      }
+
+      function treemap_name(d) {
+        return d.ancestors().reverse().map(d => d.data.name).join("/")
+      }
+    }
+
+      // enable syntax highlighting
+      hljs.initHighlightingOnLoad();
+      var treemap_metric;
+
+      $(document).ready(function() {
+        if(isFileAPIAvailable()) {
+          $('#files').bind('change', handleDialog);
+        }
+        // see if we have a URL parameter for the filename
+        var url = new URL(window.location.href);
+        var csv_file_uri = url.searchParams.get("csv_file");
+        var treemap_metric_val = url.searchParams.get("metric");
+        if (!treemap_metric_val) {
+          treemap_metric = 'elapsed_real_time_sec';
+        } else {
+          treemap_metric = treemap_metric_val
+        }
+
+        if (csv_file_uri) {
+          console.log("Got a url param for a csv: %s", csv_file_uri);
+          $.ajax({
+            type: "GET",
+            url: csv_file_uri,
+            dataType: "text",
+            success: function(csv_data) {
+                        table_top_level(csv_data); },
+            statusCode: {
+              404: function() {
+                console.log("URL parameter %s, 404 not found",csv_file_uri);}
+            },
+          });
+        }
+      });
+
+      function simple_round(num) {
+        return (Math.round((num + Number.EPSILON) * 100) / 100)
+      }
+      var table;
+
+      async function build_table(table_data) {
+        //Simple Example var example_table_virtual = new
+        table = new Tabulator("#example-table", {
+            data : table_data,
+            height:"311px",
+            layout:"fitDataFill",
+            //responsiveLayout:"hide",
+            columns:[ {  title:"Package"
+                       , field:"package"
+                       , responsive:0
+                       , hozAlign:"left"
+                       //, editor:"input"
+                       //, headerFilter:"select"
+                       , headerFilter:"input"
+                       , headerFilterFunc:"regex"
+                       //, headerFilterParams:{values:true}
+                       },
+                      { title:"FileName"
+                       ,field:"FileName"
+                       , responsive:0
+                       , hozAlign:"left"
+                       , headerFilter:"input"
+                       , headerFilterFunc:"regex"
+                       },
+                      {title:"Time (min)", field:"elapsed_real_time_min", hozAlign:"right"},
+                      {title:"Memory (MB)", field:"max_resident_size_mb", hozAlign:"right"},
+                      {title:"FileSize (MB)", field:"file_size_mb", hozAlign:"right"}, ],
+        });
+        table.setSort("elapsed_real_time_min", "desc")
+
+        console.log("Finished build_table")
+      }
+
+      async function load_table_csv(csv) {
+          var table_data = $.csv.toObjects(csv);
+          console.log("finished toObjects")
+
+          let package_set = new Set()
+          var num_entries = table_data.length;
+          let package_re = new RegExp('^packages/([^/]+)/.*');
+          for (var i = 0; i < num_entries; i++) {
+            //console.log("Filename: ", table_data[i]['FileName']); // abc
+            var match = package_re.exec(table_data[i]['FileName']);
+            if (match != null) {
+              //console.log(match[1]); // abc
+              table_data[i]['package'] = match[1]
+              package_set.add(match[1])
+            } else {
+              table_data[i]['package'] = ''
+              package_set.add('')
+            }
+            table_data[i]['elapsed_real_time_min'] = simple_round(Number(table_data[i]['elapsed_real_time_sec'])/60.0)
+            table_data[i]['max_resident_size_mb'] = simple_round(Number(table_data[i]['max_resident_size_Kb'])/1024.0)
+            table_data[i]['file_size_mb'] = simple_round(Number(table_data[i]['FileSize'])/(1024.0*1024.))
+            //Do something
+          }
+          console.log("Finished load_table_csv")
+          return [table_data, package_set]
+      }
+
+      async function display_raw_data(div_id, table_data) {
+          $(div_id).empty();
+          $(div_id).html(JSON.stringify(table_data, null, 2));
+
+          console.log("Finished display raw data: %s", div_id)
+      }
+
+      function create_file_path_child(file_name_array,
+                                      file_name_array_idx,
+                                      table_row_obj) {
+        let new_obj = Object()
+
+        // if we reach the end of the road, then we need to append actual values
+        if ( (file_name_array.length-1) == file_name_array_idx ){
+          // there are no children in the leaves
+          Object.assign(new_obj, table_row_obj);
+          // set the name
+          // we could also do something special with the name
+          new_obj['name'] = file_name_array[file_name_array_idx]
+        }
+        // we can impose a stopping criteria for depth
+        else if (file_name_array[file_name_array_idx] === 'CMakeFiles' ) {
+          // there are no children in the leaves
+          Object.assign(new_obj, table_row_obj);
+          // set the name to the final part (the actual file name usually)
+          new_obj['name'] = file_name_array[file_name_array.length-1]
+        }
+        // otherwise, we are not at a threshold or a leaf, so recurse
+        // the name is this part of the file path
+        // the children will be a new node
+        // there is only one child, because we are building a completely path to a leaf
+        // see construct_json_package_child_tree2, for the case of insertion along
+        // a known path.  In that case, we follow identical pieces of the file
+        // path, until we can not find an identical path component
+        // This must happen because we hit a leaf (actual file),
+        // or a threshold directory (e.g., CMakeFiles) because we will not add that
+        // path to the tree.
+        else {
+          new_obj['name'] = file_name_array[file_name_array_idx]
+          new_obj['children'] = Array()
+          new_obj['children'].push(
+            create_file_path_child(file_name_array,
+                                   file_name_array_idx+1,
+                                   table_row_obj));
+        }
+        // we are done
+        return new_obj;
+
+      }
+
+      async function construct_json_package_child_tree2(package_name, table_data) {
+        let root_obj = Object()
+        let starting_obj = root_obj
+        // we add children after the name purely for stylistic reasons
+        // it makes the output json a little easier to read for debugging
+        if (package_name == '') {
+          root_obj['name'] = 'Unpackaged'
+          root_obj['children'] = Array()
+        }
+        else {
+          root_obj['name'] = "Trilinos"
+          root_obj['children'] = Array()
+          starting_obj = { name    : package_name,
+                           children: Array() }
+
+          root_obj['children'].push(starting_obj);
+        }
+
+
+        var num_entries = table_data.length;
+        for (var i = 0; i < num_entries; i++) {
+          if ( !( table_data[i]['package'] === package_name) ) continue
+
+          // split the filename
+          file_name_array = table_data[i]['FileName'].split('/')
+          if (file_name_array.length > 2) {
+            if ((file_name_array[0] === 'packages') &&
+                (file_name_array[1] === package_name)) {
+              file_name_array = file_name_array.slice(2)
+            }
+          }
+
+          // we start at the top of the tree
+          // reset the current_obj to the root
+          var current_obj = starting_obj
+          for (var level_idx = 0; level_idx < file_name_array.length; level_idx++) {
+            // search for name == file_name_array[level_idx]
+            // in the children array of the current obj
+            var child_obj = current_obj['children'].find(
+              function(element) {
+                return (element['name'] === file_name_array[level_idx]);
+              });
+
+            // we didn't find it
+            if (typeof child_obj === 'undefined') {
+              current_obj['children'].push(
+                            create_file_path_child(file_name_array,
+                                       level_idx,
+                                       table_data[i]));
+              // we are finished.
+              break;
+
+            } else {
+              current_obj = child_obj
+            }
+          }
+
+        } // loop over table entries
+        console.log("Finished json of package %s", package_name)
+        return root_obj
+      }
+
+      async function construct_json_package_child_tree(package_name, table_data) {
+        let root_obj = Object()
+        root_obj['name'] = (package_name == '') ? 'Unpackaged' : package_name
+        root_obj['children'] = Array()
+
+        var num_entries = table_data.length;
+        for (var i = 0; i < num_entries; i++) {
+          if (table_data[i]['package'] != package_name) continue
+
+          var new_obj = Object()
+          new_obj['name'] = table_data[i]['FileName']
+          new_obj['value'] = Number(table_data[i]['elapsed_real_time_sec'])
+          root_obj['children'].push(new_obj)
+        }
+        console.log("Finished json of package %s", package_name)
+        return root_obj
+      }
+
+      function merge_json_treemap_hierarchy(json_array, json_data){
+        // check if the array has a name matching the json_data
+        var child_obj = json_array.find(
+          function(element) {
+            return (element['name'] === json_data['name']);
+          });
+        // if it doesn't, then you can simply add this data to the array
+        if (typeof child_obj === 'undefined') {
+          json_array.push(json_data)
+          return;
+        }
+        // if the element is found, then we need to merge
+        else {
+          for (var i=0; i < json_data['children'].length; i++) {
+            merge_json_treemap_hierarchy(child_obj['children'],
+                                         json_data['children'][i])
+          }
+        }
+      }
+      async function table_top_level (csv) {
+          let values = await load_table_csv(csv)
+          let table_data  = values[0]
+          let package_set = values[1]
+          //load_table_csv(csv_event)
+          let my_futures = Array()
+          let table_future = build_table(table_data)
+          //let raw_data_future = display_raw_data('#result', table_data)
+
+          for (let package_name of Array.from(package_set)) {
+            my_futures.push(construct_json_package_child_tree2(package_name,table_data))
+          }
+          let rcs = await Promise.all(my_futures);
+
+          let json_data = Object()
+          json_data['name'] = "All"
+          json_data['children'] = Array()
+
+          for (var p=rcs.length-1; p >= 0; p--) {
+            if (rcs[p] == null) continue
+            // I want a merge function...
+            // merge_json_treemap_hierarchy(json_data['children'], rcs[p])
+            merge_json_treemap_hierarchy(json_data['children'], rcs[p])
+            //json_data['children'].push(rcs[p])
+          }
+          //let raw_treemap_json_future = display_raw_data('#json_result', json_data)
+          glb_json_data = json_data
+
+          // add radio buttons to toggle treemaps
+          // id="treemap_metrics">
+          // <label><input type="radio" name="treemap_metric" value="size" checked> Size</label>
+          ordered_treemap_metrics = [
+                        "elapsed_real_time_min"
+                      , "elapsed_real_time_sec"
+                      , "max_resident_size_Kb"
+                      , "max_resident_size_mb"
+                      , "FileSize"
+                      , "file_size_mb"
+                      , "cpu_sec_kernel_mode"
+                      , "cpu_sec_user_mode"
+                      , "num_filesystem_inputs"
+                      , "num_filesystem_outputs"
+                      , "symbol_debug"
+                      , "symbol_stack_unwind"
+                      , "symbol_ro_data_global"
+                      , "symbol_ro_data_local"
+                      , "symbol_text_global"
+                      , "symbol_text_local"
+                      , "symbol_unique_global"
+          ];
+
+          var select = document.getElementById("treemap_metrics");
+          for(var i=0; i<ordered_treemap_metrics.length; i++) {
+            const metric = ordered_treemap_metrics[i]
+            var option = document.createElement('option');
+            option.text = option.value = metric;
+            select.remove(i);
+            select.add(option, i);
+          }
+
+          let tree_map_future = build_treemap3( "#my_dataviz"
+                                               , json_data
+                                               , select.value
+                                               )
+
+          await Promise.all([table_future
+                             //, raw_treemap_json_future
+                             //, raw_data_future,
+                             , tree_map_future
+                             ]);
+          //await table_future;
+          //await raw_data_future;
+      }
+
+      function handleDialog(event) {
+        var files = event.target.files;
+        var file = files[0];
+
+        var fileInfo = `
+          <span style="font-weight:bold;">${escape(file.name)}</span><br>
+          - FileType: ${file.type || 'n/a'}<br>
+          - FileSize: ${file.size} bytes<br>
+          - LastModified: ${file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() : 'n/a'}
+        `;
+
+        document.getElementById('file-info').innerHTML = "";
+        //$('#file-info').innerHTML = "";
+        $('#file-info').append(fileInfo);
+
+        var reader = new FileReader();
+        reader.readAsText(file);
+        reader.onload = function(event){
+          var csv = event.target.result;
+          table_top_level(csv)
+        }
+      }
+      window.addEventListener('resize', function(){
+        table.redraw();
+        console.log("Firing redraw")
+      });
+    </script>
+  </body>
+</html>
+
+<!-- ^(?!.*unit-test|.*example|.*unit_test|.*/test).*$ -->
