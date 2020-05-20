@@ -153,7 +153,10 @@ form {
 
           // the tooltip
           node.append("title")
-              .text(d => `${treemap_name(d)} ${format(d.value)}`);
+              .text(d =>  ( typeof d.children === 'undefined' ) ?
+                           d.data['FileName'] + ' ' + format(d.value) :
+                           `${treemap_name(d)} ${format(d.value)}`);
+              //.text(d => `${treemap_name(d)} ${format(d.value)}`);
 
           node.append("rect")
               .attr("id", d => (d.leafUid = create_uid("leaf")).id)
