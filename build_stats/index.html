@@ -258,27 +258,34 @@ form {
                           .sum( d => d[field])
                           .sort( function(a, b) {
                                // nodes with no children sorted descending
-                               if ((typeof a._children === 'undefined') &&
-                                   (typeof b._children === 'undefined') ) {
+                               if ((typeof a.children === 'undefined') &&
+                                   (typeof b.children === 'undefined') ) {
+                                    //console.log("%s and %s do not have children", a.data.name, b.data.name);
+                                    //return a.value - b.value;
                                     return d3.descending(a.value, b.value);
                                }
                                // both have children, sort descending
                                else if (
-                                   (typeof a._children !== 'undefined') &&
-                                   (typeof b._children !== 'undefined') ) {
+                                   (typeof a.children !== 'undefined') &&
+                                   (typeof b.children !== 'undefined') ) {
+                                    //console.log("%s and %s *do* have children", a.data.name, b.data.name);
+                                    //return a.value - b.value;
                                     return d3.descending(a.value, b.value);
                                }
                                //If a should be before b, the function must return a value
                                // less than zero;
                                //if b should be before a, the function must return a value
                                // greater than zero;
+                               //
                                // a does not have children, so make sure b is first
-                               else if (typeof a._children === 'undefined') {
-                                  return 1;
+                               else if (typeof a.children === 'undefined') {
+                                  //console.log("putting %s before %s", b.data.name, a.data.name);
+                                  return 1000;
                                }
                                // b does not have children, so make sure a is first
                                else {
-                                  return -1;
+                                  //console.log("putting %s before %s", a.data.name, b.data.name);
+                                  return -1000;
                                }
                              }));
                           // this was the original sort
