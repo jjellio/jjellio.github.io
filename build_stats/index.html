@@ -248,12 +248,15 @@ form {
 //           console.log("=============== Field  ==============")
 //           console.log(field)
 //           console.log("====================================")
-
         const tm = d3.treemap()
                       .tile(treemap_tile)
                       (d3.hierarchy(data)
                           .sum( d => d[field])
-                          .sort((a, b) => b[field] - a[field]))
+                          .sort((a, b) => d3.descending(a.value, b.value)));
+                          // this was the original sort
+                          //b[field] - a[field]))
+                          // it would be nice to think of a better way to lay
+                          // out small values.
         return tm
       }
 
