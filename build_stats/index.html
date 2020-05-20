@@ -155,14 +155,18 @@ form {
           node.append("title")
               .text(d => `${treemap_name(d)} ${format(d.value)}`);
 
-
           node.append("rect")
               .attr("id", d => (d.leafUid = create_uid("leaf")).id)
-              .attr("fill", d => { while (d.depth > 1) d = d.parent; return color(d.data.name); })
+              .attr("fill", d => {
+                                    // shade by level
+                                    //while (d.depth > 1) d = d.parent;
+                                    // shade by name
+                                    return color(d.data.name); })
               .attr("fill-opacity", 0.6)
               .attr("width", d => d.x1 - d.x0)
               .attr("height", d => d.y1 - d.y0)
-              .attr("stroke", "#fff");
+              .attr("stroke", d => "#fff" );
+              //d => (typeof d._children !== 'undefined') ? "#100" : "#fff" );
 
 
           node.append("clipPath")
@@ -252,7 +256,31 @@ form {
                       .tile(treemap_tile)
                       (d3.hierarchy(data)
                           .sum( d => d[field])
-                          .sort((a, b) => d3.descending(a.value, b.value)));
+                          .sort( function(a, b) {
+                               // nodes with no children sorted descending
+                               if ((typeof a._children === 'undefined') &&
+                                   (typeof b._children === 'undefined') ) {
+                                    return d3.descending(a.value, b.value);
+                               }
+                               // both have children, sort descending
+                               else if (
+                                   (typeof a._children !== 'undefined') &&
+                                   (typeof b._children !== 'undefined') ) {
+                                    return d3.descending(a.value, b.value);
+                               }
+                               //If a should be before b, the function must return a value
+                               // less than zero;
+                               //if b should be before a, the function must return a value
+                               // greater than zero;
+                               // a does not have children, so make sure b is first
+                               else if (typeof a._children === 'undefined') {
+                                  return 1;
+                               }
+                               // b does not have children, so make sure a is first
+                               else {
+                                  return -1;
+                               }
+                             }));
                           // this was the original sort
                           //b[field] - a[field]))
                           // it would be nice to think of a better way to lay
